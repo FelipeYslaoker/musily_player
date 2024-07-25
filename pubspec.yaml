@@ -1,0 +1,29 @@
+name: musily_player
+description: "A new Flutter project."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.4.3 <4.0.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+  audio_service: ^0.18.14
+  just_audio: ^0.9.39
+  audio_session: ^0.1.20
+  rxdart: ^0.27.7
+  youtube_explode_dart: ^2.2.1
+  http: ^1.2.1
+  audioplayers: ^6.0.0
+  audio_service_mpris: ^0.1.5
+  loading_animation_widget: ^1.2.1
+  dio: ^5.5.0+1
+  queue: ^3.1.0+2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+flutter:
+  uses-material-design: true
