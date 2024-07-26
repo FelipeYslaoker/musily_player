@@ -8,7 +8,7 @@ void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   await MusilyService.init(
     config: MusilyServiceConfig(
-      androidNotificationChannelId: 'org.app.musily',
+      androidNotificationChannelId: 'com.example.musily_player',
       androidNotificationChannelName: 'Musily Player',
       androidShowNotificationBadge: true,
     ),
