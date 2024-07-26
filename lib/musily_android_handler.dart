@@ -257,7 +257,7 @@ class MusilyAndroidHandler extends BaseAudioHandler
           MediaAction.seekForward,
           MediaAction.seekBackward,
         },
-        androidCompactActionIndices: const [0, 1, 3],
+        androidCompactActionIndices: const [0, 1, 2],
         processingState: processingStateMap[audioPlayer.processingState]!,
         repeatMode: repeatModeMap[audioPlayer.loopMode]!,
         shuffleMode: audioPlayer.shuffleModeEnabled
