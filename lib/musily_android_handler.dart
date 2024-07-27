@@ -41,6 +41,7 @@ class MusilyAndroidHandler extends BaseAudioHandler
   List<MusilyTrack> mediaQueue = [];
   MusilyTrack? activeTrack;
   bool shuffleEnabled = false;
+  bool loadingTrackAudio = false;
   MusilyRepeatMode repeatMode = MusilyRepeatMode.noRepeat;
   final taskQueue = Queue(
     delay: const Duration(
@@ -250,6 +251,9 @@ class MusilyAndroidHandler extends BaseAudioHandler
     );
     _durationSubscription = audioPlayer.durationStream.listen(
       (duration) {
+        if (loadingTrackAudio) {
+          return;
+        }
         _handleDurationChange(duration);
         _onDurationChanged?.call(duration ?? Duration.zero);
       },
@@ -427,6 +431,9 @@ class MusilyAndroidHandler extends BaseAudioHandler
         _mediaQueue = mediaQueue;
       }
       activeTrack = track;
+      activeTrack?.position = Duration.zero;
+      activeTrack?.duration = Duration.zero;
+      loadingTrackAudio = true;
       _onActiveTrackChanged?.call(track);
       if (_mediaQueue.where((element) => element.id == track.id).isEmpty) {
         _mediaQueue = [track];
@@ -451,6 +458,12 @@ class MusilyAndroidHandler extends BaseAudioHandler
             return;
           }
         }
+      }
+
+      loadingTrackAudio = false;
+
+      if (activeTrack?.id != track.id) {
+        return;
       }
 
       final audioSource = await buildAudioSource(track, url);
@@ -530,7 +543,7 @@ class MusilyAndroidHandler extends BaseAudioHandler
     } else {
       _mediaQueue = mediaQueue;
     }
-    if (_mediaQueue[activeTrackIndex()] == activeTrack) {
+    if (_mediaQueue[activeTrackIndex()] == _mediaQueue.last) {
       await skipToTrack(0);
       return;
     }
