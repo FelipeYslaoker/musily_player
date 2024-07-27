@@ -523,6 +523,17 @@ class MusilyAndroidHandler extends BaseAudioHandler
 
   @override
   Future<void> skipToNext() async {
+    // ignore: no_leading_underscores_for_local_identifiers
+    late final List<MusilyTrack> _mediaQueue;
+    if (shuffleEnabled) {
+      _mediaQueue = shuffledQueue;
+    } else {
+      _mediaQueue = mediaQueue;
+    }
+    if (_mediaQueue[activeTrackIndex()] == activeTrack) {
+      await skipToTrack(0);
+      return;
+    }
     await skipToTrack(activeTrackIndex() + 1);
   }
 
