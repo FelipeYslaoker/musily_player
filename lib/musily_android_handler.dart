@@ -603,6 +603,18 @@ class MusilyAndroidHandler extends BaseAudioHandler
     for (final item in items) {
       addToQueue(item);
     }
+    if (shuffleEnabled) {
+      final List<MusilyTrack> mediaQueueClone = List.from(mediaQueue);
+      final newQueueHash = items.map((element) => element.hash).join('');
+      final currentShuffledQueueHash = shuffledQueue
+          .map(
+            (element) => element.hash,
+          )
+          .join('');
+      if (newQueueHash != currentShuffledQueueHash) {
+        shuffledQueue = mediaQueueClone..shuffle();
+      }
+    }
     updateMediaItemQueue();
     _onAction?.call(MusilyPlayerAction.queueChanged);
   }
