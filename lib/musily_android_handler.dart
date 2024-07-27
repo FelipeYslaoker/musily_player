@@ -543,6 +543,12 @@ class MusilyAndroidHandler extends BaseAudioHandler
       await seek(Duration.zero);
       return;
     }
+    if (repeatMode == MusilyRepeatMode.repeat) {
+      if (mediaQueue[activeTrackIndex()] == mediaQueue.first) {
+        await skipToTrack(mediaQueue.length - 1);
+        return;
+      }
+    }
     await skipToTrack(activeTrackIndex() - 1);
   }
 
