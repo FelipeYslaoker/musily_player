@@ -2,9 +2,11 @@ import 'dart:io';
 import 'dart:ui';
 
 import 'package:audio_service/audio_service.dart';
+import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:musily_player/musily_linux_handler.dart';
 
 import 'package:musily_player/musily_player.dart';
+import 'package:musily_player/presenter/controllers/downloader/downloader_controller.dart';
 
 class MusilyServiceConfig {
   bool androidResumeOnClick;
@@ -69,6 +71,11 @@ class MusilyService {
   static Future<void> init({
     required MusilyServiceConfig config,
   }) async {
+    JustAudioMediaKit.ensureInitialized(
+      android: true,
+      linux: true,
+      windows: true,
+    );
     late final BaseAudioHandler platformAudioHandler;
     if (Platform.isAndroid) {
       platformAudioHandler = MusilyAndroidHandler();
@@ -81,5 +88,7 @@ class MusilyService {
       config: config.toAudioServiceConfig(),
     );
     MusilyPlayer().setAudioHandler(audioHandler as MusilyAudioHandler);
+    final downloaderController = DownloaderController();
+    await downloaderController.init();
   }
 }
