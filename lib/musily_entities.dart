@@ -53,6 +53,7 @@ class MusilyTrack {
   Duration duration;
   Duration position;
   Duration bufferedPosition;
+  bool fromSmartQueue;
 
   MusilyTrack({
     required this.id,
@@ -68,5 +69,6 @@ class MusilyTrack {
     this.position = Duration.zero,
     this.bufferedPosition = Duration.zero,
     this.hash,
+    this.fromSmartQueue = false,
   });
 }
