@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:musily_player/musily_player.dart';
 import 'package:musily_player/musily_service.dart';
 import 'package:musily_player/player.dart';
-import 'package:musily_player/widget/player_controller/player_controller.dart';
+import 'package:musily_player/presenter/controllers/downloader/downloader_controller.dart';
+import 'package:musily_player/presenter/controllers/player/player_controller.dart';
+import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+
   await MusilyService.init(
     config: MusilyServiceConfig(
       androidNotificationChannelId: 'com.example.musily_player',
@@ -13,22 +15,67 @@ void main(List<String> args) async {
       androidShowNotificationBadge: true,
     ),
   );
+
+  final downloaderController = DownloaderController();
+
+  final playerController = PlayerController(
+    loadUrl: (track) async {
+      final yt = YoutubeExplode();
+      final searchResults = await yt.search.search(
+        '${track.title} ${track.artist?.name}',
+      );
+      final ytId = searchResults.firstOrNull?.id;
+      final manifest = await yt.videos.streamsClient.getManifest(ytId);
+      final audioStremInfo = manifest.audioOnly.withHighestBitrate();
+      final streamUrl = audioStremInfo.url.toString();
+      return streamUrl;
+    },
+    favoriteButton: (context, track) => IconButton(
+      onPressed: () {},
+      icon: const Icon(
+        Icons.favorite_rounded,
+      ),
+    ),
+    getLyrics: (trackId) async {
+      await Future.delayed(
+        const Duration(
+          seconds: 2,
+        ),
+      );
+      return null;
+    },
+    getSmartQueue: (currentQueue) async {
+      await Future.delayed(
+        const Duration(
+          seconds: 2,
+        ),
+      );
+      return currentQueue;
+    },
+  );
+
   runApp(
-    const MyApp(),
+    MyApp(
+      downloaderController: downloaderController,
+      playerController: playerController,
+    ),
   );
 }
 
 class MyApp extends StatefulWidget {
-  const MyApp({super.key});
+  final PlayerController playerController;
+  final DownloaderController downloaderController;
+  const MyApp({
+    super.key,
+    required this.playerController,
+    required this.downloaderController,
+  });
 
   @override
   State<MyApp> createState() => _MyAppState();
 }
 
 class _MyAppState extends State<MyApp> {
-  final playerController = PlayerController(
-    musilyPlayer: MusilyPlayer(),
-  );
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -47,7 +94,8 @@ class _MyAppState extends State<MyApp> {
       ),
       home: Scaffold(
         body: AudioPlayerScreen(
-          playerController: playerController,
+          playerController: widget.playerController,
+          downloaderController: widget.downloaderController,
         ),
       ),
     );
