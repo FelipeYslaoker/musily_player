@@ -20,11 +20,11 @@
  */
 
 import 'dart:async';
-import 'dart:math';
 
 import 'package:audio_service/audio_service.dart';
-import 'package:audioplayers/audioplayers.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:musily_player/musily_player.dart';
+import 'package:queue/queue.dart';
 
 class MusilyLinuxHandler extends BaseAudioHandler
     implements MusilyAudioHandler {
@@ -34,33 +34,37 @@ class MusilyLinuxHandler extends BaseAudioHandler
   }
 
   AudioPlayer audioPlayer = AudioPlayer();
+  List<MusilyTrack> shuffledQueue = [];
   List<MusilyTrack> mediaQueue = [];
-  bool? shuffleEnabled;
-  MusilyRepeatMode? repeatMode;
   MusilyTrack? activeTrack;
+  bool shuffleEnabled = false;
+  bool loadingTrackAudio = false;
+  MusilyRepeatMode repeatMode = MusilyRepeatMode.noRepeat;
+  final taskQueue = Queue(
+    delay: const Duration(
+      microseconds: 10,
+    ),
+  );
 
-  late StreamSubscription<PlayerState> _playbackEventSubscription;
+  late StreamSubscription<PlaybackEvent> _playbackEventSubscription;
   late StreamSubscription<Duration?> _durationSubscription;
   late StreamSubscription<int?> _currentIndexSubscription;
+  late StreamSubscription<SequenceState?> _sequenceStateSubscription;
   late StreamSubscription<Duration?> _positionChangeSubscription;
 
-  @override
-  Future<void> addToQueue(MusilyTrack track) async {
-    mediaQueue.add(track);
-    _onAction?.call(MusilyPlayerAction.queueChanged);
-    if (track.url == null) {
-      _loadTrackUrl(track);
-    }
-  }
+  final processingStateMap = {
+    ProcessingState.idle: AudioProcessingState.idle,
+    ProcessingState.loading: AudioProcessingState.loading,
+    ProcessingState.buffering: AudioProcessingState.buffering,
+    ProcessingState.ready: AudioProcessingState.ready,
+    ProcessingState.completed: AudioProcessingState.completed,
+  };
 
-  Future<void> _loadTrackUrl(MusilyTrack track) async {
-    final filteredTrack = mediaQueue.where((element) => element.id == track.id);
-    if (filteredTrack.isNotEmpty) {
-      final uri = await _uriGetter?.call(track);
-      filteredTrack.first.url = uri.toString();
-      _onAction?.call(MusilyPlayerAction.queueChanged);
-    }
-  }
+  final repeatModeMap = {
+    LoopMode.off: AudioServiceRepeatMode.none,
+    LoopMode.one: AudioServiceRepeatMode.one,
+    LoopMode.all: AudioServiceRepeatMode.all,
+  };
 
   void Function(
     MusilyPlayerState playerState,
@@ -75,19 +79,6 @@ class MusilyLinuxHandler extends BaseAudioHandler
   void Function(MusilyTrack? track)? _onActiveTrackChanged;
 
   Future<Uri> Function(MusilyTrack track)? _uriGetter;
-
-  final processingStateMap = {
-    PlayerState.stopped: AudioProcessingState.idle,
-    PlayerState.paused: AudioProcessingState.loading,
-    PlayerState.playing: AudioProcessingState.ready,
-    PlayerState.completed: AudioProcessingState.completed,
-  };
-
-  final repeatModeMap = {
-    MusilyRepeatMode.noRepeat: AudioServiceRepeatMode.none,
-    MusilyRepeatMode.repeatOne: AudioServiceRepeatMode.one,
-    MusilyRepeatMode.repeat: AudioServiceRepeatMode.all,
-  };
 
   @override
   void setOnPlayerStateChanged(
@@ -139,33 +130,38 @@ class MusilyLinuxHandler extends BaseAudioHandler
     _onActiveTrackChanged = callback;
   }
 
-  Future<void> _handlePlaybackEvent(PlayerState state) async {
+  Future<void> _handlePlaybackEvent(PlaybackEvent event) async {
     try {
-      if (state == PlayerState.completed) {
+      shuffleEnabled = audioPlayer.shuffleModeEnabled;
+      if (event.processingState == ProcessingState.completed) {
         switch (repeatMode) {
           case MusilyRepeatMode.noRepeat:
             if (hasNext) {
+              if (activeTrack == mediaQueue.last) {
+                await seek(Duration.zero);
+                return;
+              }
               await skipToNext();
             } else if (activeTrack != null) {
               await skipToTrack(0);
-              if (state == PlayerState.playing) {
+              if (audioPlayer.playing) {
                 await pause();
               }
-              if (activeTrack?.position != Duration.zero) {
+              if (audioPlayer.duration != Duration.zero) {
                 await seek(Duration.zero);
               }
             }
             break;
           case MusilyRepeatMode.repeatOne:
-            await seek(Duration.zero);
-            if (state != PlayerState.playing) {
+            if (activeTrack != null) {
+              await playTrack(activeTrack!);
+            }
+            if (!audioPlayer.playing) {
               await play();
             }
             break;
           case MusilyRepeatMode.repeat:
             await skipToNext();
-            break;
-          case null:
             break;
         }
       }
@@ -175,20 +171,10 @@ class MusilyLinuxHandler extends BaseAudioHandler
     }
   }
 
-  int activeTrackIndex() {
-    final filteredTrack = mediaQueue.where(
-      (element) => element.id == activeTrack?.id,
-    );
-    if (filteredTrack.isNotEmpty) {
-      return mediaQueue.indexOf(filteredTrack.first);
-    }
-    return -1;
-  }
-
   void _handleDurationChange(Duration? duration) {
     try {
-      final index = activeTrackIndex();
-      if (index != -1 && queue.value.isNotEmpty) {
+      final index = audioPlayer.currentIndex;
+      if (index != null && queue.value.isNotEmpty) {
         final newQueue = List<MediaItem>.from(queue.value);
         final oldMediaItem = newQueue[index];
         final newMediaItem = oldMediaItem.copyWith(duration: duration);
@@ -216,23 +202,42 @@ class MusilyLinuxHandler extends BaseAudioHandler
     }
   }
 
+  void _handleSequenceStateChange(SequenceState? sequenceState) {
+    try {
+      final sequence = sequenceState?.effectiveSequence;
+      if (sequence != null && sequence.isNotEmpty) {
+        final items =
+            sequence.map((source) => source.tag as MediaItem).toList();
+        queue.add(items);
+      }
+    } catch (e, stackTrace) {
+      Logger.log('Error handling sequence state change', e, stackTrace);
+    }
+  }
+
   void _setupEventSubscriptions() {
-    _playbackEventSubscription = audioPlayer.onPlayerStateChanged.listen(
-      (audioPlayerState) async {
-        await _handlePlaybackEvent(audioPlayerState);
+    _playbackEventSubscription = audioPlayer.playbackEventStream.listen(
+      (playbackEvent) async {
+        await _handlePlaybackEvent(playbackEvent);
         if (_onPlayerStateChanged != null) {
           MusilyPlayerState playerState = MusilyPlayerState.disposed;
-          switch (audioPlayerState) {
-            case PlayerState.stopped:
+          switch (playbackEvent.processingState) {
+            case ProcessingState.idle:
               playerState = MusilyPlayerState.stopped;
-            case PlayerState.playing:
-              playerState = MusilyPlayerState.playing;
-            case PlayerState.paused:
+              break;
+            case ProcessingState.loading:
               playerState = MusilyPlayerState.paused;
-            case PlayerState.completed:
+            case ProcessingState.buffering:
+              playerState = MusilyPlayerState.buffering;
+              break;
+            case ProcessingState.ready:
+              playerState = audioPlayer.playing
+                  ? MusilyPlayerState.playing
+                  : MusilyPlayerState.paused;
+              break;
+            case ProcessingState.completed:
               playerState = MusilyPlayerState.completed;
-            case PlayerState.disposed:
-              playerState = MusilyPlayerState.disposed;
+              break;
           }
           _onPlayerStateChanged!.call(playerState);
           if (playerState == MusilyPlayerState.completed) {
@@ -241,45 +246,50 @@ class MusilyLinuxHandler extends BaseAudioHandler
         }
       },
     );
-    _durationSubscription = audioPlayer.onDurationChanged.listen(
+    _durationSubscription = audioPlayer.durationStream.listen(
       (duration) {
+        if (loadingTrackAudio) {
+          return;
+        }
         _handleDurationChange(duration);
-        _onDurationChanged?.call(duration);
+        _onDurationChanged?.call(duration ?? Duration.zero);
       },
     );
-    _positionChangeSubscription =
-        audioPlayer.onPositionChanged.listen((position) {
-      _onPositionChanged?.call(position);
-    });
+    _currentIndexSubscription =
+        audioPlayer.currentIndexStream.listen(_handleCurrentSongIndexChanged);
+    _sequenceStateSubscription =
+        audioPlayer.sequenceStateStream.listen(_handleSequenceStateChange);
+    _positionChangeSubscription = audioPlayer.positionStream.listen(
+      (duration) {
+        _onPositionChanged?.call(duration);
+      },
+    );
   }
 
   void _updatePlaybackState() {
-    final hasPreviousOrNext = hasPrevious || hasNext;
     playbackState.add(
       playbackState.value.copyWith(
         controls: [
-          if (hasPreviousOrNext) MediaControl.skipToPrevious,
-          if (audioPlayer.state == PlayerState.playing)
-            MediaControl.pause
-          else
-            MediaControl.play,
-          if (hasPreviousOrNext) MediaControl.skipToNext
+          MediaControl.skipToPrevious,
+          if (audioPlayer.playing) MediaControl.pause else MediaControl.play,
+          MediaControl.skipToNext
         ],
         systemActions: const {
           MediaAction.seek,
           MediaAction.seekForward,
           MediaAction.seekBackward,
         },
-        androidCompactActionIndices: const [0, 1, 3],
-        processingState: processingStateMap[audioPlayer.state]!,
-        repeatMode: repeatModeMap[repeatMode] ?? AudioServiceRepeatMode.none,
-        shuffleMode: (shuffleEnabled ?? false)
+        androidCompactActionIndices: const [0, 1, 2],
+        processingState: processingStateMap[audioPlayer.processingState]!,
+        repeatMode: repeatModeMap[audioPlayer.loopMode]!,
+        shuffleMode: audioPlayer.shuffleModeEnabled
             ? AudioServiceShuffleMode.all
             : AudioServiceShuffleMode.none,
-        playing: audioPlayer.state == PlayerState.playing,
-        updatePosition: activeTrack?.duration ?? Duration.zero,
-        bufferedPosition: activeTrack?.duration ?? Duration.zero,
-        queueIndex: activeTrackIndex(),
+        playing: audioPlayer.playing,
+        updatePosition: audioPlayer.position,
+        bufferedPosition: audioPlayer.bufferedPosition,
+        speed: audioPlayer.speed,
+        queueIndex: audioPlayer.currentIndex ?? 0,
       ),
     );
   }
@@ -291,9 +301,28 @@ class MusilyLinuxHandler extends BaseAudioHandler
     await _playbackEventSubscription.cancel();
     await _durationSubscription.cancel();
     await _currentIndexSubscription.cancel();
+    await _sequenceStateSubscription.cancel();
     await _positionChangeSubscription.cancel();
+    taskQueue.dispose();
 
     await super.onTaskRemoved();
+  }
+
+  int activeTrackIndex() {
+    // ignore: no_leading_underscores_for_local_identifiers
+    late final List<MusilyTrack> _mediaQueue;
+    if (shuffleEnabled) {
+      _mediaQueue = shuffledQueue;
+    } else {
+      _mediaQueue = mediaQueue;
+    }
+    final filteredTrack = _mediaQueue.where(
+      (element) => element.id == activeTrack?.id,
+    );
+    if (filteredTrack.isNotEmpty) {
+      return _mediaQueue.indexOf(filteredTrack.first);
+    }
+    return -1;
   }
 
   bool get hasNext => activeTrackIndex() + 1 < mediaQueue.length;
@@ -302,14 +331,7 @@ class MusilyLinuxHandler extends BaseAudioHandler
 
   @override
   Future<void> play() async {
-    if (activeTrack != null &&
-        (activeTrack!.filePath != null || activeTrack!.url != null)) {
-      final audioSource = await buildAudioSource(
-        activeTrack!,
-        activeTrack!.filePath ?? activeTrack!.url!,
-      );
-      await audioPlayer.play(audioSource);
-    }
+    await audioPlayer.play();
     _onAction?.call(MusilyPlayerAction.play);
   }
 
@@ -330,7 +352,6 @@ class MusilyLinuxHandler extends BaseAudioHandler
   Future<void> stop() async {
     activeTrack = null;
     _onActiveTrackChanged?.call(null);
-    _handleCurrentSongIndexChanged(activeTrackIndex());
     await audioPlayer.stop();
     _onAction?.call(MusilyPlayerAction.stop);
   }
@@ -343,14 +364,14 @@ class MusilyLinuxHandler extends BaseAudioHandler
   @override
   Future<void> fastForward() => seek(
         Duration(
-          seconds: (activeTrack?.position.inSeconds ?? 0) + 15,
+          seconds: audioPlayer.position.inSeconds + 15,
         ),
       );
 
   @override
   Future<void> rewind() => seek(
         Duration(
-          seconds: (activeTrack?.position.inSeconds ?? 0) - 15,
+          seconds: audioPlayer.position.inSeconds - 15,
         ),
       );
 
@@ -365,15 +386,34 @@ class MusilyLinuxHandler extends BaseAudioHandler
       } else {
         url = '';
       }
+      // ignore: no_leading_underscores_for_local_identifiers
+      late List<MusilyTrack> _mediaQueue;
+      if (shuffleEnabled) {
+        _mediaQueue = shuffledQueue;
+      } else {
+        _mediaQueue = mediaQueue;
+      }
       activeTrack = track;
+      activeTrack?.position = Duration.zero;
+      activeTrack?.duration = Duration.zero;
+      loadingTrackAudio = true;
       _onActiveTrackChanged?.call(track);
-      if (mediaQueue.where((element) => element.id == track.id).isEmpty) {
+      if (_mediaQueue.where((element) => element.id == track.id).isEmpty) {
+        _mediaQueue = [track];
         mediaQueue = [track];
+        shuffledQueue = [track];
+        updateMediaItemQueue();
         _onAction?.call(MusilyPlayerAction.queueChanged);
       }
       if (url.isEmpty) {
+        if (audioPlayer.playing) {
+          await audioPlayer.stop();
+        }
         if (_uriGetter != null) {
           final uri = await _uriGetter!.call(track);
+          if (audioPlayer.playing) {
+            await audioPlayer.stop();
+          }
           url = uri.toString();
           track.url = uri.toString();
           _onActiveTrackChanged?.call(track);
@@ -382,27 +422,33 @@ class MusilyLinuxHandler extends BaseAudioHandler
           }
         }
       }
-      final audioSource = await buildAudioSource(track, url);
 
-      await audioPlayer.play(audioSource);
+      loadingTrackAudio = false;
+
+      if (activeTrack?.id != track.id) {
+        return;
+      }
+
+      final audioSource = await buildAudioSource(track, url);
+      final queue = ConcatenatingAudioSource(
+        children: [audioSource],
+      );
+      await audioPlayer.setAudioSource(queue, preload: false);
+      await audioPlayer.play();
     } catch (e, stackTrace) {
       Logger.log('Error playing song', e, stackTrace);
     }
   }
 
-  bool _isUrl(String string) {
-    return RegExp(r'^https?:\/\/[^\s/$.?#].[^\s]*$').hasMatch(string);
-  }
-
-  Future<Source> buildAudioSource(
+  Future<AudioSource> buildAudioSource(
     MusilyTrack track,
     String url,
   ) async {
-    if (!_isUrl(url)) {
-      return DeviceFileSource(url);
-    }
+    final uri = Uri.parse(url);
+    final tag = mapToMediaItem(track, url);
+    final audioSource = AudioSource.uri(uri, tag: tag);
 
-    return UrlSource(url);
+    return audioSource;
   }
 
   @override
@@ -412,61 +458,39 @@ class MusilyLinuxHandler extends BaseAudioHandler
 
   @override
   Future<void> skipToTrack(int newIndex) async {
-    if (newIndex >= 0 && newIndex < mediaQueue.length) {
-      final newTrack = mediaQueue[newIndex];
+    // ignore: no_leading_underscores_for_local_identifiers
+    late final List<MusilyTrack> _mediaQueue;
+    if (shuffleEnabled) {
+      _mediaQueue = shuffledQueue;
+    } else {
+      _mediaQueue = mediaQueue;
+    }
+    if (newIndex >= 0 && newIndex < _mediaQueue.length) {
+      final newTrack = _mediaQueue[newIndex];
       await playTrack(newTrack);
     }
   }
 
   @override
   Future<void> skipToNext() async {
-    if ((shuffleEnabled ?? false) && mediaQueue.length > 2) {
-      final random = Random();
-      int min = 0;
-      int max = mediaQueue.length - 1;
-      int randomIndex = (min + random.nextDouble() * (max - min)).toInt();
-      if (randomIndex == activeTrackIndex()) {
-        if (mediaQueue.last == mediaQueue[randomIndex]) {
-          randomIndex - 1;
-        }
-        if (mediaQueue.first == mediaQueue[randomIndex]) {
-          randomIndex + 1;
-        }
-      }
-      await skipToTrack(randomIndex);
-      return;
+    // ignore: no_leading_underscores_for_local_identifiers
+    late final List<MusilyTrack> _mediaQueue;
+    if (shuffleEnabled) {
+      _mediaQueue = shuffledQueue;
+    } else {
+      _mediaQueue = mediaQueue;
     }
-    if (repeatMode == MusilyRepeatMode.repeat) {
-      if (mediaQueue[activeTrackIndex()] == mediaQueue.last) {
-        await skipToTrack(0);
-        return;
-      }
+    if (_mediaQueue[activeTrackIndex()] == _mediaQueue.last) {
+      await skipToTrack(0);
+      return;
     }
     await skipToTrack(activeTrackIndex() + 1);
   }
 
   @override
   Future<void> skipToPrevious() async {
-    final currentPosition =
-        await audioPlayer.getCurrentPosition() ?? Duration.zero;
-    if (currentPosition.inSeconds > 5) {
+    if (audioPlayer.position.inSeconds > 5) {
       await seek(Duration.zero);
-      return;
-    }
-    if ((shuffleEnabled ?? false) && mediaQueue.length > 2) {
-      final random = Random();
-      int min = 0;
-      int max = mediaQueue.length - 1;
-      int randomIndex = (min + random.nextDouble() * (max - min)).toInt();
-      if (randomIndex == activeTrackIndex()) {
-        if (mediaQueue.last == mediaQueue[randomIndex]) {
-          randomIndex - 1;
-        }
-        if (mediaQueue.first == mediaQueue[randomIndex]) {
-          randomIndex + 1;
-        }
-      }
-      await skipToTrack(randomIndex);
       return;
     }
     if (repeatMode == MusilyRepeatMode.repeat) {
@@ -481,28 +505,73 @@ class MusilyLinuxHandler extends BaseAudioHandler
   @override
   Future<void> setShuffleMode(AudioServiceShuffleMode shuffleMode) async {
     final shuffleEnabled = shuffleMode != AudioServiceShuffleMode.none;
+    await audioPlayer.setShuffleModeEnabled(shuffleEnabled);
     this.shuffleEnabled = shuffleEnabled;
+    // ignore: no_leading_underscores_for_local_identifiers
+    final List<MusilyTrack> _mediaQueue = List.from(mediaQueue);
+    shuffledQueue = _mediaQueue..shuffle();
     _onShuffleChanged?.call(shuffleEnabled);
+    updateMediaItemQueue();
+    _onAction?.call(MusilyPlayerAction.queueChanged);
+  }
+
+  Future<void> updateMediaItemQueue() async {
+    List<MediaItem> newMediaItemQueue = [];
+    for (final item in mediaQueue) {
+      final mediaItem = mapToMediaItem(item, item.url ?? '');
+      newMediaItemQueue.add(mediaItem);
+    }
+    queue.add(newMediaItemQueue);
+  }
+
+  @override
+  Future<void> addToQueue(MusilyTrack track) async {
+    mediaQueue.add(track);
+    shuffledQueue.add(track);
+    updateMediaItemQueue();
+    _onAction?.call(MusilyPlayerAction.queueChanged);
   }
 
   @override
   Future<void> removeFromQueue(MusilyTrack track) async {
-    final itemFiltered = mediaQueue.where((element) => element.id == track.id);
-    if (itemFiltered.isNotEmpty) {
-      final index = mediaQueue.indexOf(itemFiltered.first);
-      mediaQueue.removeAt(index);
-      _onAction?.call(MusilyPlayerAction.queueChanged);
-    }
+    mediaQueue.removeWhere(
+      (element) => element.id == track.id || element.hash == track.hash,
+    );
+    shuffledQueue.removeWhere(
+      (element) => element.id == track.id || element.hash == track.hash,
+    );
+    updateMediaItemQueue();
+    _onAction?.call(MusilyPlayerAction.queueChanged);
   }
 
   @override
   List<MusilyTrack> getQueue() {
+    if (shuffleEnabled) {
+      return shuffledQueue;
+    }
     return mediaQueue;
   }
 
   @override
   Future<void> setQueue(List<MusilyTrack> items) async {
-    mediaQueue = items;
+    mediaQueue = [];
+    shuffledQueue = [];
+    for (final item in items) {
+      addToQueue(item);
+    }
+    if (shuffleEnabled) {
+      final List<MusilyTrack> mediaQueueClone = List.from(mediaQueue);
+      final newQueueHash = items.map((element) => element.hash).join('');
+      final currentShuffledQueueHash = shuffledQueue
+          .map(
+            (element) => element.hash,
+          )
+          .join('');
+      if (newQueueHash != currentShuffledQueueHash) {
+        shuffledQueue = mediaQueueClone..shuffle();
+      }
+    }
+    updateMediaItemQueue();
     _onAction?.call(MusilyPlayerAction.queueChanged);
   }
 
@@ -514,12 +583,12 @@ class MusilyLinuxHandler extends BaseAudioHandler
 
   @override
   MusilyRepeatMode getRepeatMode() {
-    return repeatMode ?? MusilyRepeatMode.noRepeat;
+    return repeatMode;
   }
 
   @override
   bool getShuffleMode() {
-    return shuffleEnabled ?? false;
+    return shuffleEnabled;
   }
 
   @override
@@ -527,5 +596,32 @@ class MusilyLinuxHandler extends BaseAudioHandler
     await setShuffleMode(
       enabled ? AudioServiceShuffleMode.all : AudioServiceShuffleMode.none,
     );
+  }
+
+  @override
+  Future<void> setRepeatMode(AudioServiceRepeatMode repeatMode) async {
+    late final LoopMode playerRepeatMode;
+    late final MusilyRepeatMode musilyRepeatMode;
+    switch (repeatMode) {
+      case AudioServiceRepeatMode.none:
+        playerRepeatMode = LoopMode.off;
+        musilyRepeatMode = MusilyRepeatMode.noRepeat;
+        break;
+      case AudioServiceRepeatMode.one:
+        playerRepeatMode = LoopMode.one;
+        musilyRepeatMode = MusilyRepeatMode.repeatOne;
+        break;
+      case AudioServiceRepeatMode.all:
+        playerRepeatMode = LoopMode.all;
+        musilyRepeatMode = MusilyRepeatMode.repeat;
+        break;
+      case AudioServiceRepeatMode.group:
+        playerRepeatMode = LoopMode.all;
+        musilyRepeatMode = MusilyRepeatMode.repeat;
+        break;
+    }
+    await audioPlayer.setLoopMode(playerRepeatMode);
+    this.repeatMode = musilyRepeatMode;
+    _onRepeatModeChanged?.call(musilyRepeatMode);
   }
 }
