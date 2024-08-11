@@ -1,3 +1,8 @@
+## 2.0.0
+
+- **Linux**: Migrated from `audioplayers` to `just_audio` for improved audio handling.
+- **Feature**: Integrated a robust download manager for better file management.
+
 ## 1.0.2
 
 - Improved shuffled flow
