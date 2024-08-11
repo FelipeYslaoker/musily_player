@@ -3,13 +3,16 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:musily_player/musily_player.dart';
-import 'package:musily_player/widget/mini_player_widget.dart';
-import 'package:musily_player/widget/player_controller/player_controller.dart';
+import 'package:musily_player/presenter/controllers/downloader/downloader_controller.dart';
+import 'package:musily_player/presenter/controllers/player/player_controller.dart';
+import 'package:musily_player/presenter/widgets/mini_player_widget.dart';
 
 class AudioPlayerScreen extends StatefulWidget {
   final PlayerController playerController;
+  final DownloaderController downloaderController;
   const AudioPlayerScreen({
     required this.playerController,
+    required this.downloaderController,
     super.key,
   });
 
@@ -51,7 +54,8 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
     setState(() {
       loading = false;
     });
-    return MusilyTrack(
+    final track = MusilyTrack(
+      hash: map['trackId'].toString(),
       id: map['trackId'].toString(),
       title: map['trackName'],
       artist: MusilyArtist(
@@ -59,16 +63,15 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
         name: map['artistName'],
       ),
       highResImg: largeArtworkUrl,
+      fromSmartQueue: true,
       lowResImg: artworkUrl,
     );
+    return track;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('YouTube Audio Player'),
-      ),
       body: Stack(
         children: [
           Padding(
@@ -76,33 +79,77 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
               vertical: 16,
               horizontal: 16,
             ),
-            child: TextField(
-              enabled: !loading,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: 'Nome da música',
-                isDense: true,
-              ),
-              onSubmitted: (value) async {
-                final track = await searchTrack(value, context);
-                if (track == null) {
-                  return;
-                }
-                final queue = widget.playerController.data.queue;
-                if (queue.isEmpty) {
-                  widget.playerController.methods.loadAndPlay(track);
-                } else {
-                  final item = await widget.playerController.methods
-                      .getPlayableItem(track);
-                  widget.playerController.methods.addToQueue(item);
-                }
-              },
+            child: Column(
+              children: [
+                TextField(
+                  enabled: !loading,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    labelText: 'Nome da música',
+                    isDense: true,
+                  ),
+                  onSubmitted: (value) async {
+                    final track = await searchTrack(value, context);
+                    if (track == null) {
+                      return;
+                    }
+                    final queue = widget.playerController.data.queue;
+                    if (queue.isEmpty) {
+                      widget.playerController.methods
+                          .loadAndPlay(track, track.id);
+                    } else {
+                      widget.playerController.methods.addToQueue([track]);
+                    }
+                  },
+                ),
+                const SizedBox(
+                  height: 12,
+                ),
+                FilledButton(
+                  onPressed: () async {
+                    final trackNames = [
+                      'Royals Pure Heroine Lorde',
+                      'Асия Не по пути',
+                      'Алоэ Асия',
+                      'bad_news Bastille',
+                      'Sleepsong Bastille',
+                      'I Am My Own Dune Moss',
+                    ];
+                    trackNames.shuffle();
+                    for (final trackName in trackNames) {
+                      final queue = widget.playerController.data.queue;
+                      final track = await searchTrack(trackName, context);
+                      if (queue.map((e) => e.id).contains(track?.id)) {
+                        continue;
+                      }
+                      if (track == null) {
+                        continue;
+                      }
+                      if (queue.isEmpty) {
+                        widget.playerController.methods
+                            .loadAndPlay(track, track.id);
+                      } else {
+                        widget.playerController.methods.addToQueue([track]);
+                        widget.playerController.updateData(
+                          widget.playerController.data.copyWith(
+                            tracksFromSmartQueue: widget
+                                .playerController.data.tracksFromSmartQueue
+                              ..add(track.id),
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  child: const Text('Construir fila'),
+                ),
+              ],
             ),
           ),
           Align(
             alignment: Alignment.bottomCenter,
             child: MiniPlayerWidget(
               playerController: widget.playerController,
+              downloaderController: widget.downloaderController,
             ),
           ),
         ],
