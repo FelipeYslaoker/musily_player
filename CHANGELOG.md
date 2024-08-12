@@ -1,3 +1,7 @@
+## 2.0.1
+
+**Localization**: Added basic localization support.
+
 ## 2.0.0
 
 - **Linux**: Migrated from `audioplayers` to `just_audio` for improved audio handling.
