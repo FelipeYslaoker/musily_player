@@ -12,7 +12,9 @@ class PlayerController extends BaseController<PlayerData, PlayerMethods> {
   final _downloaderController = DownloaderController();
   final MusilyPlayer _musilyPlayer = MusilyPlayer();
 
-  final PlayerLocalization? localization;
+  final PlayerLocalization Function(
+    BuildContext context,
+  )? localization;
 
   // Fetch data methods
   Future<String?> Function(

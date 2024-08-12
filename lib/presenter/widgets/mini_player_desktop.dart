@@ -114,7 +114,8 @@ class _MiniPlayerDesktopState extends State<MiniPlayerDesktop> {
                                     ),
                                     Text(
                                       widget.playerController.localization
-                                              ?.lyricsNotFound ??
+                                              ?.call(context)
+                                              .lyricsNotFound ??
                                           'Lyrics not found',
                                       style: Theme.of(context)
                                           .textTheme

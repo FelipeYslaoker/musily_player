@@ -57,7 +57,8 @@ class _PlayerBannerState extends State<PlayerBanner> {
                           ),
                           Text(
                             widget.playerController.localization
-                                    ?.lyricsNotFound ??
+                                    ?.call(context)
+                                    .lyricsNotFound ??
                                 'Lyrics not found',
                             style:
                                 Theme.of(context).textTheme.bodyLarge?.copyWith(
