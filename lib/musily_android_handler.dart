@@ -275,7 +275,7 @@ class MusilyAndroidHandler extends BaseAudioHandler
         controls: [
           MediaControl.skipToPrevious,
           if (audioPlayer.playing) MediaControl.pause else MediaControl.play,
-          MediaControl.skipToNext
+          MediaControl.skipToNext,
         ],
         systemActions: const {
           MediaAction.seek,
@@ -319,7 +319,6 @@ class MusilyAndroidHandler extends BaseAudioHandler
               await audioPlayer.setVolume(1);
               break;
             case AudioInterruptionType.pause:
-              await audioPlayer.play();
               break;
             case AudioInterruptionType.unknown:
               break;
@@ -368,6 +367,11 @@ class MusilyAndroidHandler extends BaseAudioHandler
 
   @override
   Future<void> play() async {
+    if (audioPlayer.processingState == ProcessingState.idle) {
+      if (activeTrack != null) {
+        await playTrack(activeTrack!);
+      }
+    }
     await audioPlayer.play();
     _onAction?.call(MusilyPlayerAction.play);
   }
@@ -387,10 +391,8 @@ class MusilyAndroidHandler extends BaseAudioHandler
 
   @override
   Future<void> stop() async {
-    activeTrack = null;
-    _onActiveTrackChanged?.call(null);
     await audioPlayer.stop();
-    _onAction?.call(MusilyPlayerAction.stop);
+    _updatePlaybackState();
   }
 
   @override
