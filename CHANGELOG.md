@@ -1,3 +1,7 @@
+## 2.0.2
+
+**Localization**: Improved localization support.
+
 ## 2.0.1
 
 **Localization**: Added basic localization support.
