@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:musily_player/core/domain/presenter/controllers/base_controller.dart';
+import 'package:musily_player/domain/entities/player_localization.dart';
 import 'package:musily_player/musily_player.dart';
 import 'package:musily_player/presenter/controllers/downloader/downloader_controller.dart';
 import 'package:musily_player/presenter/controllers/player/player_data.dart';
@@ -10,6 +11,8 @@ import 'package:musily_player/presenter/controllers/player/player_methods.dart';
 class PlayerController extends BaseController<PlayerData, PlayerMethods> {
   final _downloaderController = DownloaderController();
   final MusilyPlayer _musilyPlayer = MusilyPlayer();
+
+  final PlayerLocalization? localization;
 
   // Fetch data methods
   Future<String?> Function(
@@ -47,6 +50,7 @@ class PlayerController extends BaseController<PlayerData, PlayerMethods> {
   )? favoriteButton;
 
   PlayerController({
+    this.localization,
     //Fetch data methods
     this.loadUrl,
     this.getSmartQueue,

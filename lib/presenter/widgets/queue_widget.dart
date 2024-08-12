@@ -30,8 +30,8 @@ class QueueWidget extends StatelessWidget {
                   children: [
                     playerController.customQueueHeader?.call(context) ??
                         Text(
-                          // TODO LOCALIZATION
-                          'Playing now',
+                          playerController.localization?.playingNow ??
+                              'Playing Now',
                           style:
                               Theme.of(context).textTheme.bodySmall?.copyWith(
                                     fontWeight: FontWeight.w500,
