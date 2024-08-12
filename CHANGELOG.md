@@ -1,3 +1,7 @@
+## 2.0.3
+
+- Android playback improvements
+
 ## 2.0.2
 
 **Localization**: Improved localization support.
