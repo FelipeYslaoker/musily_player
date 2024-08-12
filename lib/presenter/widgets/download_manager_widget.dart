@@ -20,10 +20,28 @@ class DownloadManagerWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return controller.builder(
       builder: (context, data) {
+        final downloadingItems = data.queue.where(
+          (e) => e.status == e.downloadDownloading,
+        );
+        final queuedItems = data.queue.where(
+          (e) => e.status == e.downloadQueued || e.status == e.downloadPaused,
+        );
+        final otherItems = data.queue.where(
+          (e) =>
+              e.status != e.downloadDownloading &&
+              e.status != e.downloadQueued &&
+              e.status != e.downloadPaused,
+        );
+
+        final items = [
+          ...downloadingItems,
+          ...queuedItems,
+          ...otherItems,
+        ];
         return ListView.builder(
-          itemCount: data.queue.length,
+          itemCount: items.length,
           itemBuilder: (context, index) {
-            final item = data.queue[index];
+            final item = items[index];
             return Padding(
               padding: dense
                   ? EdgeInsets.zero
