@@ -602,12 +602,10 @@ class _MiniPlayerDesktopState extends State<MiniPlayerDesktop> {
                                   fit: StackFit.loose,
                                   children: [
                                     IconButton(
-                                      onPressed: data.queue.length < 2
-                                          ? null
-                                          : () {
-                                              widget.playerController.methods
-                                                  .toggleShowQueue();
-                                            },
+                                      onPressed: () {
+                                        widget.playerController.methods
+                                            .toggleShowQueue();
+                                      },
                                       icon: Icon(
                                         Icons.queue_music_rounded,
                                         size: 20,
