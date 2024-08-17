@@ -1,3 +1,7 @@
+## 2.0.4
+
+- Added option to set ThemeMode manually
+
 ## 2.0.3
 
 - Android playback improvements
