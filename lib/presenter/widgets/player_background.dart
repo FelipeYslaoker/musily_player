@@ -22,11 +22,16 @@ class _PlayerBackgroundState extends State<PlayerBackground> {
   @override
   Widget build(BuildContext context) {
     final brightness = MediaQuery.of(context).platformBrightness;
-    bool isDarkMode = brightness == Brightness.dark;
     final maxWidth = MediaQuery.of(context).size.width;
     final maxHeight = MediaQuery.of(context).size.height;
 
     return widget.playerController.builder(builder: (context, data) {
+      bool isDarkMode = () {
+        if (data.themeMode == null || data.themeMode == ThemeMode.system) {
+          return brightness == Brightness.dark;
+        }
+        return data.themeMode == ThemeMode.dark;
+      }();
       return Stack(
         children: [
           AnimatedOpacity(
