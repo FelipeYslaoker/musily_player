@@ -39,7 +39,7 @@ class QueueWidget extends StatelessWidget {
                                     fontWeight: FontWeight.w500,
                                   ),
                         ),
-                    if (playerController.onAddSmartQueueItem != null)
+                    if (playerController.getSmartQueue != null)
                       IconButton(
                         iconSize: 20,
                         onPressed: data.loadingSmartQueue
