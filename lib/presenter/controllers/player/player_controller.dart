@@ -51,6 +51,9 @@ class PlayerController extends BaseController<PlayerData, PlayerMethods> {
     MusilyTrack track,
   )? favoriteButton;
 
+  // Player variables
+  ThemeMode? themeMode;
+
   PlayerController({
     this.localization,
     //Fetch data methods
@@ -69,7 +72,11 @@ class PlayerController extends BaseController<PlayerData, PlayerMethods> {
     this.trackOptionsWidget,
     this.customQueueHeader,
     this.favoriteButton,
+
+    // Player variables
+    this.themeMode,
   }) {
+    data.themeMode = themeMode;
     updateData(
       data.copyWith(
         repeatMode: _musilyPlayer.getRepeatMode(),

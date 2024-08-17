@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:musily_player/core/domain/presenter/controllers/base_controller.dart';
 import 'package:musily_player/musily_entities.dart';
 import 'package:musily_player/musily_player.dart';
@@ -37,6 +38,8 @@ class PlayerData implements BaseControllerData {
   bool showQueue;
   bool showDownloadManager;
 
+  ThemeMode? themeMode;
+
   PlayerData({
     required this.queue,
     required this.playingId,
@@ -58,6 +61,7 @@ class PlayerData implements BaseControllerData {
     required this.addingToFavorites,
     required this.showQueue,
     required this.showDownloadManager,
+    this.themeMode,
   });
 
   @override
@@ -82,6 +86,7 @@ class PlayerData implements BaseControllerData {
     bool? addingToFavorites,
     bool? showQueue,
     bool? showDownloadManager,
+    ThemeMode? themeMode,
   }) {
     return PlayerData(
       queue: queue ?? this.queue,
@@ -104,6 +109,7 @@ class PlayerData implements BaseControllerData {
       addingToFavorites: addingToFavorites ?? this.addingToFavorites,
       showQueue: showQueue ?? this.showQueue,
       showDownloadManager: showDownloadManager ?? this.showDownloadManager,
+      themeMode: themeMode ?? this.themeMode,
     );
   }
 }
