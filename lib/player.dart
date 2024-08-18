@@ -63,7 +63,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
         name: map['artistName'],
       ),
       highResImg: largeArtworkUrl,
-      fromSmartQueue: true,
+      fromSmartQueue: false,
       lowResImg: artworkUrl,
     );
     return track;
@@ -108,12 +108,12 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
                 FilledButton(
                   onPressed: () async {
                     final trackNames = [
-                      'Royals Pure Heroine Lorde',
+                      // 'Royals Pure Heroine Lorde',
                       'Асия Не по пути',
-                      'Алоэ Асия',
-                      'bad_news Bastille',
-                      'Sleepsong Bastille',
-                      'I Am My Own Dune Moss',
+                      // 'Алоэ Асия',
+                      // 'bad_news Bastille',
+                      // 'Sleepsong Bastille',
+                      // 'I Am My Own Dune Moss',
                     ];
                     trackNames.shuffle();
                     for (final trackName in trackNames) {
@@ -130,13 +130,6 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
                             .loadAndPlay(track, track.id);
                       } else {
                         widget.playerController.methods.addToQueue([track]);
-                        widget.playerController.updateData(
-                          widget.playerController.data.copyWith(
-                            tracksFromSmartQueue: widget
-                                .playerController.data.tracksFromSmartQueue
-                              ..add(track.id),
-                          ),
-                        );
                       }
                     }
                   },

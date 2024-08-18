@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:musily_player/musily_player.dart';
 import 'package:musily_player/musily_service.dart';
 import 'package:musily_player/player.dart';
 import 'package:musily_player/presenter/controllers/downloader/downloader_controller.dart';
 import 'package:musily_player/presenter/controllers/player/player_controller.dart';
+import 'package:musily_repository/core/data/entities/simplified_album_entity_impl.dart';
+import 'package:musily_repository/core/data/entities/simplified_artist_entity_impl.dart';
+import 'package:musily_repository/core/data/repositories/musily_repository.dart';
+import 'package:musily_repository/core/domain/entities/track_entity.dart';
+import 'package:musily_repository/core/domain/enums/source.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
 void main(List<String> args) async {
@@ -17,6 +23,8 @@ void main(List<String> args) async {
   );
 
   final downloaderController = DownloaderController();
+  final musilyRepository = MusilyRepository();
+  await musilyRepository.initialize();
 
   final playerController = PlayerController(
     loadUrl: (track) async {
@@ -44,13 +52,67 @@ void main(List<String> args) async {
       );
       return null;
     },
+    onAddSmartQueueItem: (track) {
+      track.fromSmartQueue = false;
+    },
     getSmartQueue: (currentQueue) async {
-      await Future.delayed(
-        const Duration(
-          seconds: 2,
-        ),
+      final smartQueue = await musilyRepository.getRelatedTracks(
+        currentQueue
+            .map(
+              (track) => TrackEntity(
+                id: track.id,
+                hash: track.hash ?? '',
+                title: track.title ?? '',
+                artist: SimplifiedArtistEntityImpl(
+                  id: track.artist?.id,
+                  name: track.artist?.name,
+                  source: Source.youtube,
+                  highResImg: null,
+                  lowResImg: null,
+                ),
+                album: SimplifiedAlbumEntityImpl(
+                  id: track.album?.id ?? '',
+                  title: track.album?.title ?? '',
+                  artist: SimplifiedArtistEntityImpl(
+                    id: track.artist?.id,
+                    name: track.artist?.name,
+                    source: Source.youtube,
+                    highResImg: null,
+                    lowResImg: null,
+                  ),
+                  lowResImg: null,
+                  highResImg: null,
+                  source: Source.youtube,
+                ),
+                lowResImg: track.lowResImg,
+                highResImg: track.highResImg,
+                source: Source.youtube,
+                lyrics: null,
+              ),
+            )
+            .toList(),
       );
-      return currentQueue;
+      return smartQueue
+          .map(
+            (track) => MusilyTrack(
+              id: track.id,
+              ytId: track.id,
+              album: MusilyAlbum(
+                id: track.album.id,
+                title: track.album.title,
+              ),
+              artist: MusilyArtist(
+                id: track.artist.id ?? '',
+                name: track.artist.name ?? '',
+              ),
+              fromSmartQueue: track.recommendedTrack,
+              hash: track.hash,
+              title: track.title,
+              highResImg: track.highResImg,
+              lowResImg: track.lowResImg,
+            ),
+          )
+          .toList();
     },
   );
 
