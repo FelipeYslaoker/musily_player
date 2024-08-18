@@ -120,18 +120,19 @@ class QueueWidget extends StatelessWidget {
                               : null,
                         ),
                       ),
-                      leading: playing
+                      leading: playing && data.isPlaying
                           ? SizedBox(
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 13.5),
+                                  horizontal: 13.5,
+                                ),
                                 child: LoadingAnimationWidget.staggeredDotsWave(
                                   color: Theme.of(context)
                                           .buttonTheme
                                           .colorScheme
                                           ?.primary ??
                                       Colors.white,
-                                  size: 20,
+                                  size: 21,
                                 ),
                               ),
                             )
